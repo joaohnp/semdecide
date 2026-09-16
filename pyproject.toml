@@ -1,15 +1,27 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reflex-guard"
+name = "semdecide"
 version = "0.2.0"
-description = "Dependency-free semantic decisions for Unix and CI"
+description = "Typed semantic decisions for Unix pipelines and CI, powered by Jev"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = "MIT"
 authors = [{name = "Sharvil Saxena"}]
+keywords = ["ai", "cli", "jev", "semantic", "unix", "ci"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = []
 
 [project.scripts]

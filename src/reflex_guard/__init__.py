@@ -1,4 +1,4 @@
-"""REFLEX: typed semantic decisions for Unix, CI, and guarded actions."""
+"""SemDecide: typed semantic decisions for Unix, CI, and guarded actions."""
 
 from .policy import Decision, decide
 

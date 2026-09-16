@@ -12,7 +12,7 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-REFLEX supports Python 3.10 and newer. Runtime code should remain dependency-free unless a dependency provides clear security or correctness value that cannot reasonably be implemented with the standard library.
+SemDecide supports Python 3.10 and newer. Runtime code should remain dependency-free unless a dependency provides clear security or correctness value that cannot reasonably be implemented with the standard library.
 
 ## Principles
 

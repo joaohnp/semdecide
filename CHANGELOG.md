@@ -7,11 +7,12 @@ All notable changes to this project are documented here. The format follows Keep
 ### Added
 
 - Product spec for a Unix-native semantic decision CLI backed by TypeSafe Jev.
-- Planned semantic predicate, choice, score, JSONL filter, and agent-guard recipe interfaces.
+- Semantic predicate, choice, score, JSONL filter, and agent-guard recipe interfaces.
 - Open-source contribution, security, conduct, architecture, and CI foundations.
 
 ### Changed
 
+- Renamed the primary product and executable to SemDecide to avoid collision with the Reflex web framework.
 - Repositioned the project from a standalone agent action firewall to a general semantic decision primitive for shell pipelines and CI.
 
 ## [0.1.0] - 2026-09-16

@@ -67,7 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     filtering.add_argument("--threshold", type=_bounded_probability, default=0.70)
     filtering.add_argument("--uncertainty-margin", type=_bounded_probability, default=0.05)
     filtering.add_argument("--max-records", type=int, default=DEFAULT_MAX_RECORDS)
-    filtering.add_argument("--raw", action="store_true", help="omit _reflex metadata")
+    filtering.add_argument("--raw", action="store_true", help="omit _semdecide metadata")
     filtering.add_argument("--jsonl", action="store_true", help="emit JSONL (the default)")
     common(filtering)
 
@@ -107,6 +107,21 @@ def _emit(value: Any, *, machine: bool, quiet: bool, stdout: TextIO) -> None:
             print(line, file=stdout)
 
 
+def _emit_error(kind: str, message: str, *, args: argparse.Namespace, stderr: TextIO) -> None:
+    if getattr(args, "quiet", False):
+        return
+    if getattr(args, "json", False):
+        payload = {
+            "schema_version": SCHEMA_VERSION,
+            "command": args.command,
+            "error": {"kind": kind, "message": message},
+        }
+        print(json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")), file=stderr)
+    else:
+        prefix = "provider error: " if kind == "provider_error" else ""
+        print(f"semdecide: {prefix}{message}", file=stderr)
+
+
 def _provider(args: argparse.Namespace) -> Provider:
     return TypeSafeProvider(timeout=args.timeout, retries=args.retries)
 
@@ -139,7 +154,7 @@ def main(argv: list[str] | None = None, *, provider: Provider | None = None, std
     stdout = stdout or sys.stdout
     stderr = stderr or sys.stderr
     if args.command == "check":
-        print("reflex: warning: 'check' is deprecated; use 'guard'", file=stderr)
+        print("semdecide: warning: 'check' is deprecated; use 'guard'", file=stderr)
     try:
         active_provider = provider or _provider(args)
         if args.command in ("guard", "check"):
@@ -191,17 +206,17 @@ def main(argv: list[str] | None = None, *, provider: Provider | None = None, std
             selected += 1
             output = dict(record)
             if not args.raw:
-                output["_reflex"] = {"schema_version": SCHEMA_VERSION, "probability": probability, "threshold": args.threshold, "model": model}
+                output["_semdecide"] = {"schema_version": SCHEMA_VERSION, "probability": probability, "threshold": args.threshold, "model": model}
             if not args.quiet:
                 print(json.dumps(output, sort_keys=True, ensure_ascii=False, separators=(",", ":")), file=stdout)
         if uncertain_count:
             return EXIT_UNCERTAIN
         return 0 if selected else EXIT_FALSE
     except (InputError, ValueError) as exc:
-        print(f"reflex: {exc}", file=stderr)
+        _emit_error("input_error", str(exc), args=args, stderr=stderr)
         return EXIT_USAGE
     except ProviderError as exc:
-        print(f"reflex: provider error: {exc}", file=stderr)
+        _emit_error("provider_error", str(exc), args=args, stderr=stderr)
         return EXIT_PROVIDER
 
 

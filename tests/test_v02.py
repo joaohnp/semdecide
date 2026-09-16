@@ -1,13 +1,16 @@
 import io
 import json
+import os
+import tempfile
 import urllib.error
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from reflex_guard.cli import main
 from reflex_guard.inputs import InputError, parse_jsonl, read_input
 from reflex_guard.providers.base import ProviderError
-from reflex_guard.providers.typesafe import TypeSafeProvider, validate_response
+from reflex_guard.providers.typesafe import TypeSafeProvider, load_api_key, validate_response
 
 
 class FakeProvider:
@@ -78,7 +81,7 @@ class CLITests(unittest.TestCase):
         rows = [json.loads(line) for line in out.splitlines()]
         self.assertEqual(code, 0)
         self.assertEqual([row["id"] for row in rows], [1, 3])
-        self.assertEqual(rows[0]["_reflex"]["schema_version"], "1")
+        self.assertEqual(rows[0]["_semdecide"]["schema_version"], "1")
 
     def test_filter_raw_empty_and_uncertain(self):
         data = b'{"id":1}\n'
@@ -96,12 +99,29 @@ class CLITests(unittest.TestCase):
         self.assertEqual(invoke(["is", "x"], b"")[0], 2)
         self.assertEqual(invoke(["filter", "x"], b"not-json\n")[0], 2)
         self.assertEqual(invoke(["is", "x", "--max-input-bytes", "2"], b"abc")[0], 2)
+        self.assertEqual(invoke(["is", "x", "--text", "abc", "--max-input-bytes", "0"])[0], 2)
         self.assertEqual(invoke(["is", "x"], b"a\x00b")[0], 2)
 
     def test_provider_error_maps_to_four(self):
         code, _, err = invoke(["is", "x"], b"data", FakeProvider(error=ProviderError("offline")))
         self.assertEqual(code, 4)
         self.assertIn("provider error", err)
+
+    def test_machine_errors_are_structured_on_stderr(self):
+        code, out, err = invoke(["is", "x", "--json"], b"data", FakeProvider(error=ProviderError("offline")))
+        self.assertEqual((code, out), (4, ""))
+        payload = json.loads(err)
+        self.assertEqual(payload["schema_version"], "1")
+        self.assertEqual(payload["command"], "is")
+        self.assertEqual(payload["error"], {"kind": "provider_error", "message": "offline"})
+
+        code, out, err = invoke(["is", "x", "--json"], b"", FakeProvider())
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(json.loads(err)["error"]["kind"], "input_error")
+
+    def test_quiet_suppresses_errors(self):
+        code, out, err = invoke(["is", "x", "--quiet"], b"data", FakeProvider(error=ProviderError("offline")))
+        self.assertEqual((code, out, err), (4, "", ""))
 
     def test_guard_policy_and_deprecated_check(self):
         allow = FakeProvider([0.05, 0.05, 0.02, 0.9, 0.9], choice="allow", score=0.1)
@@ -133,6 +153,20 @@ class ValidationTests(unittest.TestCase):
         score = {"q": {"type": "score", "instructions": "x", "criteria": ["a", "b"]}}
         with self.assertRaises(ProviderError):
             validate_response({"answers": {"q": {"score": 1, "probabilities": [.5], "confidence": .8}}}, score)
+        with self.assertRaises(ProviderError):
+            validate_response({"answers": {"q": {"score": 2, "probabilities": [.5, .5], "confidence": .8}}}, score)
+
+    def test_credentials_file_accepts_exported_and_plain_assignments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "credentials.env"
+            for content in ("TYPESAFE_API_KEY=plain-key\n", "export TYPESAFE_API_KEY='quoted-key'\n"):
+                path.write_text(content, encoding="utf-8")
+                with patch.dict(os.environ, {"TYPESAFE_CREDENTIALS_FILE": str(path)}, clear=True):
+                    self.assertIn(load_api_key(), {"plain-key", "quoted-key"})
+
+    def test_semdecide_api_url_precedes_compatibility_url(self):
+        with patch.dict(os.environ, {"SEMDECIDE_API_URL": "https://new.example", "REFLEX_API_URL": "https://old.example"}, clear=True):
+            self.assertEqual(TypeSafeProvider(api_key="x").url, "https://new.example")
 
     def test_invalid_json_no_retry(self):
         calls = []

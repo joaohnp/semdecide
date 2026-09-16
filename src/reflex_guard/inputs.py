@@ -24,6 +24,8 @@ def read_bytes(stream: BinaryIO, *, max_bytes: int) -> bytes:
 
 
 def read_input(*, text: str | None, file: str | None, stdin: BinaryIO, max_bytes: int) -> str:
+    if max_bytes <= 0:
+        raise InputError("--max-input-bytes must be positive")
     if text is not None and file is not None:
         raise InputError("--text and --file cannot be combined")
     if text is not None:

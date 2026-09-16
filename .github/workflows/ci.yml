@@ -41,6 +41,15 @@ jobs:
         run: python -m build
       - name: Validate metadata
         run: python -m twine check dist/*
+      - name: Install and smoke-test wheel
+        run: |
+          python -m pip install --force-reinstall dist/*.whl
+          semdecide --version
+          semdecide is --help
+          semdecide choose --help
+          semdecide score --help
+          semdecide filter --help
+          semdecide guard --help
       - uses: actions/upload-artifact@v4
         with:
           name: distributions

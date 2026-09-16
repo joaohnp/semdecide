@@ -26,11 +26,17 @@ def load_api_key() -> str:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
         raise ProviderError(f"cannot read credentials file {path}: {exc}") from exc
-    for line in lines:
-        if line.startswith("export TYPESAFE_API_KEY="):
-            parsed = shlex.split(line.split("=", 1)[1])
-            if len(parsed) == 1 and parsed[0]:
-                return parsed[0]
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        if not line.startswith("TYPESAFE_API_KEY="):
+            continue
+        parsed = shlex.split(line.split("=", 1)[1], comments=True)
+        if len(parsed) == 1 and parsed[0]:
+            return parsed[0]
     raise ProviderError(f"TYPESAFE_API_KEY not found in {path}")
 
 
@@ -107,7 +113,7 @@ def validate_response(value: Any, questions: Mapping[str, Mapping[str, Any]]) ->
             clean_probs = [_number(item, f"answers.{key}.probabilities", low=0, high=1) for item in probabilities]
             if abs(sum(clean_probs) - 1.0) > 0.02:
                 raise ProviderError(f"invalid TypeSafe response: answers.{key}.probabilities must sum to 1")
-            clean[key] = {"score": _number(answer.get("score"), f"answers.{key}.score", low=0, high=count), "probabilities": clean_probs, "confidence": _number(answer.get("confidence"), f"answers.{key}.confidence", low=0, high=1)}
+            clean[key] = {"score": _number(answer.get("score"), f"answers.{key}.score", low=0, high=count - 1), "probabilities": clean_probs, "confidence": _number(answer.get("confidence"), f"answers.{key}.confidence", low=0, high=1)}
         else:
             raise ProviderError(f"unsupported question type: {kind}")
     model = value.get("model")
@@ -121,7 +127,7 @@ class TypeSafeProvider:
         if timeout <= 0 or retries < 0 or retries > 5:
             raise ValueError("timeout must be positive and retries must be between 0 and 5")
         self.api_key = api_key
-        self.url = url or os.environ.get("REFLEX_API_URL", DEFAULT_URL)
+        self.url = url or os.environ.get("SEMDECIDE_API_URL") or os.environ.get("REFLEX_API_URL", DEFAULT_URL)
         self.timeout = timeout
         self.retries = retries
         self.transport = transport or _default_transport

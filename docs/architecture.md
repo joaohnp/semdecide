@@ -1,10 +1,10 @@
 # Architecture
 
-REFLEX turns text or structured records into typed semantic decisions that ordinary shell scripts and CI jobs can consume.
+SemDecide turns text or structured records into typed semantic decisions that ordinary shell scripts and CI jobs can consume.
 
 ## Design rule
 
-Jev makes narrow semantic judgments. REFLEX validates and exposes them. Caller-owned code decides whether any real-world side effect occurs.
+Jev makes narrow semantic judgments. SemDecide validates and exposes them. Caller-owned code decides whether any real-world side effect occurs.
 
 ```mermaid
 flowchart LR
@@ -85,8 +85,8 @@ Provider responses are untrusted external data. Every expected field and numeric
 
 ## Privacy and cost
 
-Input sent to Jev leaves the local machine. REFLEX should make that boundary clear, cap accidental payload size, expose usage returned by Jev, and avoid implicit persistent caching.
+Input sent to Jev leaves the local machine. SemDecide should make that boundary clear, cap accidental payload size, expose usage returned by Jev, and avoid implicit persistent caching.
 
 ## Non-goals
 
-REFLEX is not an authorization system, an agent executor, a sandbox, an observability backend, or a security proof. It is a small semantic decision layer designed to compose with those systems.
+SemDecide is not an authorization system, an agent executor, a sandbox, an observability backend, or a security proof. It is a small semantic decision layer designed to compose with those systems.
