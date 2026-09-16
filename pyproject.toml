@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reflex-guard"
-version = "0.1.0"
-description = "A Jev-backed semantic control plane for agent actions"
+version = "0.2.0"
+description = "Dependency-free semantic decisions for Unix and CI"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,6 +13,7 @@ authors = [{name = "Sharvil Saxena"}]
 dependencies = []
 
 [project.scripts]
+semdecide = "reflex_guard.cli:main"
 reflex = "reflex_guard.cli:main"
 
 [tool.setuptools.packages.find]
