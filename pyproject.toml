@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "semdecide"
-version = "0.2.0"
+version = "0.2.1"
 description = "Typed semantic decisions for Unix pipelines and CI, powered by Jev"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format follows Keep
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-16
+
+### Fixed
+
+- Replaced premature PyPI-style installation examples with version-pinned GitHub release artifact URLs.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added

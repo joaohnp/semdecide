@@ -6,6 +6,7 @@ import sys
 from typing import Any, BinaryIO, TextIO
 
 from .commands import choose, filter_records, predicate, score
+from . import __version__
 from .inputs import DEFAULT_MAX_INPUT_BYTES, DEFAULT_MAX_RECORDS, InputError, parse_jsonl, read_input
 from .models import SCHEMA_VERSION
 from .policy import decide, provider_failure
@@ -35,7 +36,7 @@ def _bounded_probability(value: str) -> float:
 
 def _parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(prog="semdecide", description="Semantic decisions for Unix and CI")
-    parser.add_argument("--version", action="version", version="semdecide 0.2.0")
+    parser.add_argument("--version", action="version", version=f"semdecide {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:

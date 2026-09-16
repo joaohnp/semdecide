@@ -31,10 +31,12 @@ Jev returns typed decisions instead. SemDecide gives those decisions predictable
 SemDecide requires Python 3.10 or newer.
 
 ```bash
-pipx install semdecide
-# or
-uv tool install semdecide
+pipx install https://github.com/sharziki/semdecide/releases/download/v0.2.1/semdecide-0.2.1-py3-none-any.whl
+# or, with uv
+uv tool install https://github.com/sharziki/semdecide/releases/download/v0.2.1/semdecide-0.2.1-py3-none-any.whl
 ```
+
+SemDecide is not yet published on PyPI. The commands above install the signed-off GitHub release artifact directly.
 
 From a source checkout:
 
