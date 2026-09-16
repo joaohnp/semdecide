@@ -18,6 +18,12 @@ EXIT_USAGE = 2
 EXIT_UNCERTAIN = 3
 EXIT_PROVIDER = 4
 GUARD_EXIT_CODES = {"allow": 0, "escalate": 10, "block": 20}
+SAFE_PROVIDER_MESSAGE = "semantic provider request failed"
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise InputError(message)
 
 
 def _bounded_probability(value: str) -> float:
@@ -28,7 +34,7 @@ def _bounded_probability(value: str) -> float:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="semdecide", description="Semantic decisions for Unix and CI")
+    parser = _ArgumentParser(prog="semdecide", description="Semantic decisions for Unix and CI")
     parser.add_argument("--version", action="version", version="semdecide 0.2.0")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -132,8 +138,11 @@ def _read(args: argparse.Namespace, stdin: BinaryIO) -> str:
 
 def _guard_input(args: argparse.Namespace, stdin: BinaryIO) -> tuple[str, str]:
     if args.action:
-        if len(args.action.encode()) > args.max_input_bytes:
-            raise InputError(f"input exceeds --max-input-bytes ({args.max_input_bytes})")
+        if args.max_input_bytes <= 0:
+            raise InputError("--max-input-bytes must be positive")
+        submitted_bytes = len(args.action.encode("utf-8")) + len(args.context.encode("utf-8"))
+        if submitted_bytes > args.max_input_bytes:
+            raise InputError(f"combined action and context exceed --max-input-bytes ({args.max_input_bytes})")
         return args.action, args.context
     text = read_input(text=None, file=None, stdin=stdin, max_bytes=args.max_input_bytes)
     try:
@@ -149,11 +158,18 @@ def _guard_input(args: argparse.Namespace, stdin: BinaryIO) -> tuple[str, str]:
 
 
 def main(argv: list[str] | None = None, *, provider: Provider | None = None, stdin: BinaryIO | None = None, stdout: TextIO | None = None, stderr: TextIO | None = None) -> int:
-    args = _parser().parse_args(argv)
     stdin = stdin or sys.stdin.buffer
     stdout = stdout or sys.stdout
     stderr = stderr or sys.stderr
-    if args.command == "check":
+    argument_values = list(argv) if argv is not None else sys.argv[1:]
+    try:
+        args = _parser().parse_args(argument_values)
+    except InputError as exc:
+        command = next((value for value in argument_values if value in {"is", "choose", "score", "filter", "guard", "check"}), None)
+        error_args = argparse.Namespace(command=command, json="--json" in argument_values, quiet="--quiet" in argument_values)
+        _emit_error("input_error", str(exc), args=error_args, stderr=stderr)
+        return EXIT_USAGE
+    if args.command == "check" and not args.quiet:
         print("semdecide: warning: 'check' is deprecated; use 'guard'", file=stderr)
     try:
         active_provider = provider or _provider(args)
@@ -162,8 +178,8 @@ def main(argv: list[str] | None = None, *, provider: Provider | None = None, std
             try:
                 response, latency = active_provider.evaluate({"proposed_action": action, "authorization_context": context}, QUESTIONS)
                 decision = decide(response["answers"], model=response.get("model"), latency_ms=latency)
-            except ProviderError as exc:
-                decision = provider_failure(str(exc))
+            except ProviderError:
+                decision = provider_failure("request failed")
             payload = {"schema_version": SCHEMA_VERSION, "command": "guard", **decision.as_dict()}
             _emit(payload if args.json else [f"{decision.route.upper()}: {decision.reason}", *[f"{k}={v}" for k, v in decision.signals.items() if v is not None]], machine=args.json, quiet=args.quiet, stdout=stdout)
             return GUARD_EXIT_CODES[decision.route]
@@ -215,8 +231,8 @@ def main(argv: list[str] | None = None, *, provider: Provider | None = None, std
     except (InputError, ValueError) as exc:
         _emit_error("input_error", str(exc), args=args, stderr=stderr)
         return EXIT_USAGE
-    except ProviderError as exc:
-        _emit_error("provider_error", str(exc), args=args, stderr=stderr)
+    except ProviderError:
+        _emit_error("provider_error", SAFE_PROVIDER_MESSAGE, args=args, stderr=stderr)
         return EXIT_PROVIDER
 
 

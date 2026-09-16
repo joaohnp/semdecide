@@ -65,7 +65,7 @@ printf '%s' 'Login from a new country, then payout details changed.' \
 Human output includes verdict, probability, and model confidence. Machine mode:
 
 ```bash
-... | reflex is '...' --json
+... | semdecide is '...' --json
 ```
 
 ```json
@@ -86,7 +86,7 @@ Noul currently provides probability but not a separate confidence field, so `con
 ### Choice and routing
 
 ```bash
-cat ticket.txt | reflex choose \
+cat ticket.txt | semdecide choose \
   --option support='ordinary support request' \
   --option security='possible security incident' \
   --option billing='billing or payment issue'
@@ -95,7 +95,7 @@ cat ticket.txt | reflex choose \
 ### Score
 
 ```bash
-cat response.txt | reflex score \
+cat response.txt | semdecide score \
   --level 'unsafe or misleading' \
   --level 'mostly correct but incomplete' \
   --level 'correct, grounded, and complete'
@@ -104,17 +104,17 @@ cat response.txt | reflex score \
 ### JSONL filtering
 
 ```bash
-cat tickets.jsonl | reflex filter \
+cat tickets.jsonl | semdecide filter \
   'The record indicates urgent churn risk or active customer impact' \
   --field text --threshold 0.70 --jsonl
 ```
 
-Input order and original records are preserved. Matching output records gain a namespaced `_reflex` metadata object unless `--raw` is selected.
+Input order and original records are preserved. Matching output records gain a namespaced `_semdecide` metadata object unless `--raw` is selected.
 
 ### Agent guard recipe
 
 ```bash
-reflex guard \
+semdecide guard \
   --action 'Delete the production database' \
   --context 'No exact approval or backup exists'
 ```
@@ -145,10 +145,9 @@ flowchart LR
 - `inputs.py`: stdin/file/text/JSON/JSONL decoding and size limits.
 - `providers/base.py`: provider protocol.
 - `providers/typesafe.py`: Jev HTTP transport, credentials, retries, strict response parsing.
-- `commands/predicate.py`, `choice.py`, `score.py`, `filter.py`: request planning and local policy.
-- `recipes/guard.py`: existing action policy, adapted to the provider protocol.
-- `render.py`: human, JSON, JSONL, quiet output.
-- `cli.py`: argument parsing and exit-code mapping only.
+- `commands.py`: predicate, choice, score, and filter request planning.
+- `policy.py`: deterministic guard policy and fail-closed provider behavior.
+- `cli.py`: argument parsing, rendering, and exit-code mapping.
 
 ## Build order
 

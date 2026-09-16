@@ -152,13 +152,12 @@ class TypeSafeProvider:
                 if transient and attempt < self.retries:
                     self._backoff(attempt)
                     continue
-                detail = exc.read().decode("utf-8", errors="replace")[:300]
-                raise ProviderError(f"TypeSafe returned HTTP {exc.code}: {detail}") from exc
+                raise ProviderError(f"TypeSafe returned HTTP {exc.code}") from exc
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
                 if attempt < self.retries:
                     self._backoff(attempt)
                     continue
-                raise ProviderError(f"TypeSafe unavailable: {exc}") from exc
+                raise ProviderError("TypeSafe request failed") from exc
         raise AssertionError("retry loop exhausted")
 
     def _backoff(self, attempt: int) -> None:

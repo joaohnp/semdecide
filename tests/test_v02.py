@@ -108,12 +108,14 @@ class CLITests(unittest.TestCase):
         self.assertIn("provider error", err)
 
     def test_machine_errors_are_structured_on_stderr(self):
-        code, out, err = invoke(["is", "x", "--json"], b"data", FakeProvider(error=ProviderError("offline")))
+        secret = "secret-from-provider"
+        code, out, err = invoke(["is", "x", "--json"], b"data", FakeProvider(error=ProviderError(secret)))
         self.assertEqual((code, out), (4, ""))
         payload = json.loads(err)
         self.assertEqual(payload["schema_version"], "1")
         self.assertEqual(payload["command"], "is")
-        self.assertEqual(payload["error"], {"kind": "provider_error", "message": "offline"})
+        self.assertEqual(payload["error"], {"kind": "provider_error", "message": "semantic provider request failed"})
+        self.assertNotIn(secret, err)
 
         code, out, err = invoke(["is", "x", "--json"], b"", FakeProvider())
         self.assertEqual((code, out), (2, ""))
@@ -122,6 +124,12 @@ class CLITests(unittest.TestCase):
     def test_quiet_suppresses_errors(self):
         code, out, err = invoke(["is", "x", "--quiet"], b"data", FakeProvider(error=ProviderError("offline")))
         self.assertEqual((code, out, err), (4, "", ""))
+
+    def test_argparse_errors_honor_json_and_quiet(self):
+        code, out, err = invoke(["is", "x", "--threshold", "2", "--json"])
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(json.loads(err)["error"]["kind"], "input_error")
+        self.assertEqual(invoke(["is", "x", "--threshold", "2", "--quiet"]), (2, "", ""))
 
     def test_guard_policy_and_deprecated_check(self):
         allow = FakeProvider([0.05, 0.05, 0.02, 0.9, 0.9], choice="allow", score=0.1)
@@ -132,9 +140,22 @@ class CLITests(unittest.TestCase):
         self.assertIn("deprecated", warning)
 
     def test_guard_provider_failure_fails_closed(self):
-        code, out, _ = invoke(["guard", "--action", "anything", "--json"], provider=FakeProvider(error=ProviderError("offline")))
+        secret = "secret-from-provider"
+        code, out, _ = invoke(["guard", "--action", "anything", "--json"], provider=FakeProvider(error=ProviderError(secret)))
         self.assertEqual(code, 10)
         self.assertEqual(json.loads(out)["route"], "escalate")
+        self.assertNotIn(secret, out)
+
+    def test_guard_bounds_action_and_context_together(self):
+        provider = FakeProvider()
+        code, _, err = invoke(["guard", "--action", "a", "--context", "private context", "--max-input-bytes", "1", "--json"], provider=provider)
+        self.assertEqual(code, 2)
+        self.assertEqual(json.loads(err)["error"]["kind"], "input_error")
+        self.assertEqual(provider.calls, [])
+
+    def test_deprecated_check_quiet_suppresses_warning(self):
+        allow = FakeProvider([0.05, 0.05, 0.02, 0.9, 0.9], choice="allow", score=0.1)
+        self.assertEqual(invoke(["check", "--action", "read file", "--quiet"], provider=allow), (0, "", ""))
 
 
 class ValidationTests(unittest.TestCase):
@@ -191,9 +212,9 @@ class ValidationTests(unittest.TestCase):
         calls.clear()
         def http_transport(request, timeout):
             calls.append(1)
-            raise urllib.error.HTTPError("url", 500, "boom", {}, io.BytesIO(b"failure"))
+            raise urllib.error.HTTPError("url", 500, "boom", {}, io.BytesIO(b"secret response body"))
         provider = TypeSafeProvider(api_key="secret", transport=http_transport, retries=1, sleep=lambda _: None, random_fn=lambda: 0)
-        with self.assertRaisesRegex(ProviderError, "HTTP 500"):
+        with self.assertRaisesRegex(ProviderError, r"^TypeSafe returned HTTP 500$"):
             provider.evaluate("x", {"q": {"type": "noul", "instructions": "x"}})
         self.assertEqual(len(calls), 2)
 

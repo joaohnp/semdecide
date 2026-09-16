@@ -167,7 +167,7 @@ Useful controls:
 
 `filter` accepts JSONL objects and additionally supports `--max-records`, `--field`, and `--raw`.
 
-With `--json`, failures are emitted as a versioned JSON error object on stderr. `--quiet` suppresses both normal output and diagnostics, leaving only the exit code.
+With `--json`, parsing and runtime failures are emitted as a versioned JSON error object on stderr. Provider details are intentionally redacted. `--quiet` suppresses both normal output and diagnostics, leaving only the exit code.
 
 ## Exit codes
 
