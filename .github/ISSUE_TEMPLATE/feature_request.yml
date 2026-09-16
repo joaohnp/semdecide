@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a focused semantic decision workflow or integration
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Developer problem
+      description: What recurring workflow cannot be expressed cleanly today?
+    validations:
+      required: true
+  - type: textarea
+    id: interface
+    attributes:
+      label: Proposed public interface
+      description: Show the command, input, output, and exit behavior you expect.
+    validations:
+      required: true
+  - type: textarea
+    id: uncertainty
+    attributes:
+      label: Uncertainty and failure behavior
+      description: What should happen on low confidence, provider failure, malformed input, or excessive cost?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
