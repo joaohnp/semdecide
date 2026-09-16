@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reflex-guard"
+version = "0.1.0"
+description = "A Jev-backed semantic control plane for agent actions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Sharvil Saxena"}]
+dependencies = []
+
+[project.scripts]
+reflex = "reflex_guard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
