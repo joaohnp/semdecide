@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
+
+Evaluate = Callable[[Any, Mapping[str, Mapping[str, Any]]], tuple[dict[str, Any], int]]
 
 
 class ProviderError(RuntimeError):
@@ -8,4 +10,6 @@ class ProviderError(RuntimeError):
 
 
 class Provider(Protocol):
-    def evaluate(self, state: Any, questions: Mapping[str, Mapping[str, Any]]) -> tuple[dict[str, Any], int]: ...
+    def evaluate(
+        self, state: Any, questions: Mapping[str, Mapping[str, Any]]
+    ) -> tuple[dict[str, Any], int]: ...
