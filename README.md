@@ -45,19 +45,29 @@ python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-Set a [TypeSafe AI](https://typesafe.ai) API key:
+### Provider configuration (this fork)
 
-```bash
-export TYPESAFE_API_KEY='...'
+Jev is queried through **OpenRouter by default**. In this source checkout, put the following in `.env`:
+
+```dotenv
+OPEN_ROUTER_API_KEY=...
+OPEN_ROUTER_BASE_URL=https://openrouter.ai/api/alpha
+OPEN_ROUTER_MODEL=~typesafe/jev-latest
 ```
 
-SemDecide also reads `~/.config/typesafe/credentials.env`:
+The CLI loads `.env` from the current working directory without overriding exported environment variables. All three variables are required; missing or empty values cause an error. OpenRouter requests are made once, without retries. Jev uses OpenRouter's Decisions API, not `/api/v1/chat/completions`.
 
 ```bash
-TYPESAFE_API_KEY='...'
+uv run semdecide is 'Does this require urgent attention?' --text 'Production is down' --json
 ```
 
-Keep that file mode `600`. Do not pass credentials as command-line arguments.
+To use TypeSafe directly, set `TYPESAFE_API_KEY` and select it explicitly:
+
+```bash
+uv run semdecide is 'Does this require urgent attention?' --text 'Production is down' --provider typesafe --json
+```
+
+The TypeSafe adapter also reads `~/.config/typesafe/credentials.env` as before. Keep credential files mode `600` and do not pass keys as command-line arguments. `.env` is gitignored.
 
 ## Commands
 
@@ -160,9 +170,10 @@ SemDecide rejects empty, binary, invalid UTF-8, oversized, and malformed structu
 Useful controls:
 
 ```text
+--provider          openrouter (default) or typesafe; available on every command
 --max-input-bytes   cap submitted input, default 1,000,000
 --timeout           per-attempt provider timeout, default 10 seconds
---retries           transient retry count, default 2 and maximum 5
+--retries           TypeSafe only: transient retry count, default 2 and maximum 5
 --quiet             emit no output and use only the exit code
 --json              stable JSON output for is, choose, and score
 ```
@@ -196,7 +207,7 @@ Provider failures in `guard` fail closed to `escalate`.
 
 ## Safety and privacy
 
-Input evaluated by SemDecide is sent to TypeSafe AI. Do not submit material your data policy forbids sending to that provider.
+By default, input is sent through OpenRouter to TypeSafe AI. With `--provider typesafe`, input is sent directly to TypeSafe AI. Do not submit material your data policy forbids sharing with the selected services.
 
 SemDecide is not an authorization system, sandbox, security proof, or tool executor. Semantic decisions can be wrong. Keep deterministic permission checks around money, credentials, production infrastructure, private data, and irreversible operations.
 
@@ -211,7 +222,7 @@ python3 -m venv .venv
 .venv/bin/python -m compileall -q src tests
 ```
 
-The runtime is dependency-free. Live-provider tests are acceptance checks, not part of the deterministic default suite.
+Runtime dependencies are declared in `pyproject.toml`. Live-provider tests are acceptance checks, not part of the deterministic default suite.
 
 See:
 
