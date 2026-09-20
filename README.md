@@ -69,7 +69,39 @@ uv run semdecide is 'Does this require urgent attention?' --text 'Production is 
 
 The TypeSafe adapter also reads `~/.config/typesafe/credentials.env` as before. Keep credential files mode `600` and do not pass keys as command-line arguments. `.env` is gitignored.
 
+## Primitives first, recipes optional
+
+SemDecide provides typed Jev questions and answers. You supply the instructions and decide how to interpret the results; application-specific rules are not part of the core.
+
+```python
+from reflex_guard import ChoiceQuestion, NoulQuestion, evaluate
+
+result = evaluate(
+    state={"ticket": "I was charged twice"},
+    questions={
+        "urgent": NoulQuestion(instructions="Does this require immediate attention?"),
+        "department": ChoiceQuestion(
+            instructions="Which department should handle this ticket?",
+            criteria={"billing": "Payments and invoices", "support": "Product problems"},
+        ),
+    },
+)
+print(result.model_dump(mode="json"))
+```
+
+The Python API uses exported OpenRouter configuration by default and accepts an `evaluator=` callable for TypeSafe or test doubles. Unlike the CLI, it does not load `.env` automatically. See [the primitive and recipe API](docs/recipes.md).
+
 ## Commands
+
+### `evaluate`: dynamic questions, no recipe required
+
+```bash
+semdecide evaluate --request examples/evaluation-request.json
+cat examples/evaluation-request.json | semdecide evaluate --request -
+semdecide evaluate --schema
+```
+
+An agent can generate the same JSON request on the fly: a `state` value plus named `noul`, `choice`, or `score` questions. Definitions are validated before any provider call. Output is JSON by default; exit `0` means valid evaluation, not semantic truth. Invalid input is `2`, and handled provider failures are `4`. There is no built-in threshold or routing policy in this command.
 
 ### `is`: semantic predicates
 
@@ -157,6 +189,20 @@ Jev evaluates narrow signals such as authorization, destructiveness, ambiguity, 
 
 `semdecide check` remains a deprecated compatibility alias for one minor release. A temporary `reflex` executable alias also remains for users of the prototype.
 
+### `recipe run`: reusable question sets and built-in applications
+
+```bash
+semdecide recipe run examples/ticket-triage.json --text 'I was charged twice'
+semdecide recipe run guard --action 'Read the README'
+semdecide recipe schema
+```
+
+JSON recipes define reusable questions; callers still own interpretation. Supply text through stdin, `--text`, or `--file`; add `--state-json` for structured input. Recipe output defaults to JSON. Guard remains a built-in Python recipe with its original policy and exit codes.
+
+Named JSON recipes resolve first from `.semdecide/recipes/NAME.json` in the current directory, then from `$XDG_CONFIG_HOME/semdecide/recipes/NAME.json` (default `~/.config/semdecide/recipes/NAME.json`). Explicit file paths also work. `guard` is a reserved built-in name. No Python plugins are automatically loaded or executed.
+
+See [recipes and dynamic requests](docs/recipes.md) for schemas, examples, Python composition, and compatibility details.
+
 ## Input and output
 
 Text commands accept exactly one of:
@@ -170,7 +216,7 @@ SemDecide rejects empty, binary, invalid UTF-8, oversized, and malformed structu
 Useful controls:
 
 ```text
---provider          openrouter (default) or typesafe; available on every command
+--provider          openrouter (default) or typesafe; available on evaluation commands
 --max-input-bytes   cap submitted input, default 1,000,000
 --timeout           per-attempt provider timeout, default 10 seconds
 --retries           TypeSafe only: transient retry count, default 2 and maximum 5
@@ -224,9 +270,12 @@ python3 -m venv .venv
 
 Runtime dependencies are declared in `pyproject.toml`. Live-provider tests are acceptance checks, not part of the deterministic default suite.
 
+Python result objects are strict, frozen Pydantic models: construct them with keyword arguments rather than positional arguments. Probabilities and confidence must be finite numbers between 0 and 1; scores must be finite and non-negative; token counts and latency must be non-negative integers. Existing `as_dict()` methods remain available and use `model_dump(mode="json")`. Frozen fields prevent reassignment, but nested mappings are not deeply immutable.
+
 See:
 
 - [`docs/architecture.md`](docs/architecture.md)
+- [`docs/recipes.md`](docs/recipes.md)
 - [`docs/spec/semdecide.md`](docs/spec/semdecide.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
