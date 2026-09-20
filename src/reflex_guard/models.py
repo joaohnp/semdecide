@@ -1,52 +1,89 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Annotated, Any, Mapping
+
+from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    from .recipes.guard import GuardResult as GuardResult, Route as Route
 
 SCHEMA_VERSION = "1"
 
+Probability = Annotated[float, Field(ge=0, le=1)]
+NonNegativeInt = Annotated[int, Field(ge=0)]
+NonNegativeFloat = Annotated[float, Field(ge=0)]
 
-@dataclass(frozen=True)
-class Usage:
-    input_tokens: int | None = None
-    output_tokens: int | None = None
+
+class ResultModel(BaseModel):
+    model_config = ConfigDict(
+        frozen=True,
+        strict=True,
+        extra="forbid",
+        allow_inf_nan=False,
+        revalidate_instances="always",
+    )
+
+
+class Usage(ResultModel):
+    input_tokens: NonNegativeInt | None = None
+    output_tokens: NonNegativeInt | None = None
 
     def as_dict(self) -> dict[str, int | None]:
-        return asdict(self)
+        return self.model_dump(mode="json")
 
 
-@dataclass(frozen=True)
-class PredicateResult:
-    probability: float
+class PredicateResult(ResultModel):
+    probability: Probability
     model: str | None = None
-    usage: Usage = field(default_factory=Usage)
+    usage: Usage = Field(default_factory=Usage)
 
 
-@dataclass(frozen=True)
-class ChoiceResult:
+class ChoiceResult(ResultModel):
     choice: str
-    probabilities: Mapping[str, float]
-    confidence: float
+    probabilities: Mapping[str, Probability]
+    confidence: Probability
     model: str | None = None
-    usage: Usage = field(default_factory=Usage)
+    usage: Usage = Field(default_factory=Usage)
 
 
-@dataclass(frozen=True)
-class ScoreResult:
-    score: float
-    probabilities: tuple[float, ...]
-    confidence: float
+class ScoreResult(ResultModel):
+    score: NonNegativeFloat
+    probabilities: tuple[Probability, ...]
+    confidence: Probability
     model: str | None = None
-    usage: Usage = field(default_factory=Usage)
+    usage: Usage = Field(default_factory=Usage)
 
 
-@dataclass(frozen=True)
-class GuardResult:
-    route: str
-    reason: str
-    signals: Mapping[str, Any]
+class NoulAnswer(ResultModel):
+    noul: Probability
+
+
+class ChoiceAnswer(ResultModel):
+    choice: str
+    probabilities: Mapping[str, Probability]
+    confidence: Probability
+
+
+class ScoreAnswer(ResultModel):
+    score: NonNegativeFloat
+    probabilities: tuple[Probability, ...]
+    confidence: Probability
+
+
+Answer = NoulAnswer | ChoiceAnswer | ScoreAnswer
+
+
+class EvaluationResult(ResultModel):
+    answers: dict[str, Answer]
     model: str | None = None
-    latency_ms: int | None = None
+    usage: Usage = Field(default_factory=Usage)
+    latency_ms: NonNegativeInt
 
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+
+def __getattr__(name: str) -> Any:
+    # Legacy imports stay available without making the core import a recipe.
+    if name in {"GuardResult", "Route"}:
+        from .recipes import guard
+
+        return getattr(guard, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
