@@ -1,71 +1,84 @@
+"""CLI-oriented operations composed from the public Jev primitive API."""
+
 from __future__ import annotations
 
 from typing import Any, Mapping
 
-from .models import ChoiceResult, PredicateResult, ScoreResult, Usage
+from .evaluation import evaluate as evaluate_questions
+from .models import (
+    ChoiceAnswer,
+    ChoiceResult,
+    NoulAnswer,
+    PredicateResult,
+    ScoreAnswer,
+    ScoreResult,
+    Usage,
+)
 from .providers.base import Evaluate
-
-
-def _usage(response: Mapping[str, Any]) -> Usage:
-    value = response.get("usage", {})
-    return Usage(value.get("input_tokens"), value.get("output_tokens"))
+from .questions import ChoiceQuestion, NoulQuestion, Question, ScoreQuestion
 
 
 def predicate(
     evaluate: Evaluate, state: Any, criterion: str
 ) -> tuple[PredicateResult, int]:
-    response, latency = evaluate(
-        state, {"result": {"type": "noul", "instructions": criterion}}
+    result = evaluate_questions(
+        state=state,
+        questions={"result": NoulQuestion(instructions=criterion)},
+        evaluator=evaluate,
     )
+    answer = result.answers["result"]
+    assert isinstance(answer, NoulAnswer)
     return PredicateResult(
-        response["answers"]["result"]["noul"], response.get("model"), _usage(response)
-    ), latency
+        probability=answer.noul,
+        model=result.model,
+        usage=result.usage,
+    ), result.latency_ms
 
 
 def choose(
     evaluate: Evaluate, state: Any, criterion: str, options: Mapping[str, str]
 ) -> tuple[ChoiceResult, int]:
-    response, latency = evaluate(
-        state,
-        {
-            "result": {
-                "type": "choice",
-                "instructions": criterion,
-                "criteria": dict(options),
-            }
+    result = evaluate_questions(
+        state=state,
+        questions={
+            "result": ChoiceQuestion(instructions=criterion, criteria=dict(options))
         },
+        evaluator=evaluate,
     )
-    answer = response["answers"]["result"]
+    answer = result.answers["result"]
+    assert isinstance(answer, ChoiceAnswer)
     return ChoiceResult(
-        answer["choice"],
-        answer["probabilities"],
-        answer["confidence"],
-        response.get("model"),
-        _usage(response),
-    ), latency
+        choice=answer.choice,
+        probabilities=answer.probabilities,
+        confidence=answer.confidence,
+        model=result.model,
+        usage=result.usage,
+    ), result.latency_ms
 
 
 def score(
     evaluate: Evaluate, state: Any, criterion: str, levels: list[str]
 ) -> tuple[ScoreResult, int]:
-    response, latency = evaluate(
-        state,
-        {"result": {"type": "score", "instructions": criterion, "criteria": levels}},
+    result = evaluate_questions(
+        state=state,
+        questions={"result": ScoreQuestion(instructions=criterion, criteria=levels)},
+        evaluator=evaluate,
     )
-    answer = response["answers"]["result"]
+    answer = result.answers["result"]
+    assert isinstance(answer, ScoreAnswer)
     return ScoreResult(
-        answer["score"],
-        tuple(answer["probabilities"]),
-        answer["confidence"],
-        response.get("model"),
-        _usage(response),
-    ), latency
+        score=answer.score,
+        probabilities=answer.probabilities,
+        confidence=answer.confidence,
+        model=result.model,
+        usage=result.usage,
+    ), result.latency_ms
 
 
 def filter_records(
     evaluate: Evaluate, records: list[dict[str, Any]], criterion: str, field: str | None
 ) -> tuple[list[tuple[dict[str, Any], float]], str | None, Usage, int]:
-    questions: dict[str, dict[str, str]] = {}
+    questions: dict[str, Question] = {}
     state: dict[str, Any] = {}
     for index, record in enumerate(records):
         if field is not None:
@@ -76,13 +89,13 @@ def filter_records(
             value = record
         key = f"record_{index}"
         state[key] = value
-        questions[key] = {
-            "type": "noul",
-            "instructions": f"For state field {key}: {criterion}",
-        }
-    response, latency = evaluate(state, questions)
-    matches = [
-        (record, response["answers"][f"record_{index}"]["noul"])
-        for index, record in enumerate(records)
-    ]
-    return matches, response.get("model"), _usage(response), latency
+        questions[key] = NoulQuestion(
+            instructions=f"For state field {key}: {criterion}"
+        )
+    result = evaluate_questions(state=state, questions=questions, evaluator=evaluate)
+    matches = []
+    for index, record in enumerate(records):
+        answer = result.answers[f"record_{index}"]
+        assert isinstance(answer, NoulAnswer)
+        matches.append((record, answer.noul))
+    return matches, result.model, result.usage, result.latency_ms
