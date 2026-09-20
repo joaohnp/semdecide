@@ -22,7 +22,10 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: Software Development :: Quality Assurance",
 ]
-dependencies = []
+dependencies = [
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.0,<2",
+]
 
 [project.scripts]
 semdecide = "reflex_guard.cli:main"
