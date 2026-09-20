@@ -3,9 +3,30 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping
+from contextlib import contextmanager
+from typing import Any, Iterator, Mapping
 
-from .base import ProviderError
+from pydantic import ValidationError
+
+from .base import Evaluate, ProviderError
+
+
+@contextmanager
+def provider_validation() -> Iterator[None]:
+    """Keep provider-derived model errors out of local-input diagnostics."""
+    try:
+        yield
+    except ValidationError as exc:
+        raise ProviderError("invalid semantic provider response") from exc
+
+
+def evaluate_validated(
+    evaluate: Evaluate, state: Any, questions: Mapping[str, Mapping[str, Any]]
+) -> tuple[dict[str, Any], int]:
+    """Validate before consumption, including for injected evaluators."""
+    with provider_validation():
+        response, latency = evaluate(state, questions)
+        return validate_response(response, questions), latency
 
 
 def _number(
