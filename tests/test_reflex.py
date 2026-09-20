@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from reflex_guard.client import ReflexAPIError, load_api_key
-from reflex_guard.policy import decide, provider_failure
+from reflex_guard.recipes.guard import decide, provider_failure
 
 
 def answers(**overrides):
