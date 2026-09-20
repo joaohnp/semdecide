@@ -1,0 +1,18 @@
+{
+  "schema_version": "1",
+  "state": {"ticket": "I was charged twice for my subscription."},
+  "questions": {
+    "urgent": {
+      "type": "noul",
+      "instructions": "Does this ticket require immediate attention?"
+    },
+    "department": {
+      "type": "choice",
+      "instructions": "Which department should handle this ticket?",
+      "criteria": {
+        "billing": "Payments and invoices",
+        "support": "Product problems"
+      }
+    }
+  }
+}
