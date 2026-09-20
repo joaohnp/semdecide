@@ -1,0 +1,28 @@
+{
+  "schema_version": "1",
+  "name": "ticket-triage",
+  "description": "Reusable ticket questions; the caller owns routing and urgency policy.",
+  "questions": {
+    "urgent": {
+      "type": "noul",
+      "instructions": "Does this ticket require immediate attention?"
+    },
+    "department": {
+      "type": "choice",
+      "instructions": "Which department should handle this ticket?",
+      "criteria": {
+        "billing": "Payments and invoices",
+        "support": "Product problems"
+      }
+    },
+    "impact": {
+      "type": "score",
+      "instructions": "How much impact does this issue have on the customer?",
+      "criteria": [
+        "Minor inconvenience",
+        "Significant disruption",
+        "Unable to use the product"
+      ]
+    }
+  }
+}

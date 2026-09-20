@@ -7,6 +7,7 @@ from functools import partial
 from typing import Any, BinaryIO, TextIO
 
 from dotenv import load_dotenv
+from pydantic import ValidationError
 
 from .commands import choose, filter_records, predicate, score
 from . import __version__
@@ -17,18 +18,19 @@ from .inputs import (
     parse_jsonl,
     read_input,
 )
+from .evaluation import evaluate as evaluate_questions
 from .models import SCHEMA_VERSION
-from .policy import decide, provider_failure
+from .questions import EvaluationRequest
+from .recipes import Recipe, load_recipe
+from .recipes.guard import EXIT_CODES as GUARD_EXIT_CODES, run as run_guard
 from .providers.base import Evaluate, Provider, ProviderError
 from .providers.openrouter import evaluate as evaluate_openrouter
 from .providers.typesafe import TypeSafeProvider
-from .client import QUESTIONS
 
 EXIT_FALSE = 1
 EXIT_USAGE = 2
 EXIT_UNCERTAIN = 3
 EXIT_PROVIDER = 4
-GUARD_EXIT_CODES = {"allow": 0, "escalate": 10, "block": 20}
 SAFE_PROVIDER_MESSAGE = "semantic provider request failed"
 
 
@@ -119,6 +121,51 @@ def _parser() -> argparse.ArgumentParser:
         "--jsonl", action="store_true", help="emit JSONL (the default)"
     )
     common(filtering)
+
+    evaluation = sub.add_parser(
+        "evaluate", help="evaluate caller-defined questions without policy"
+    )
+    evaluation.add_argument(
+        "--request",
+        default="-",
+        metavar="FILE",
+        help="JSON request file, or - for stdin (default)",
+    )
+    evaluation.add_argument(
+        "--schema",
+        action="store_true",
+        help="print the request JSON Schema without calling a provider",
+    )
+    evaluation_output = evaluation.add_mutually_exclusive_group()
+    evaluation_output.add_argument(
+        "--json", action="store_true", default=True, help="emit JSON (the default)"
+    )
+    evaluation_output.add_argument("--quiet", action="store_true")
+    evaluation.add_argument(
+        "--max-input-bytes", type=int, default=DEFAULT_MAX_INPUT_BYTES
+    )
+    provider_options(evaluation)
+
+    recipes = sub.add_parser("recipe", help="run built-in or declarative JSON recipes")
+    recipe_sub = recipes.add_subparsers(dest="recipe_command", required=True)
+    recipe_run = recipe_sub.add_parser(
+        "run", help="run guard, a recipe file, or a locally/user-installed name"
+    )
+    recipe_run.add_argument("name", help="guard, a JSON path, or a recipe name")
+    common(recipe_run)
+    recipe_run.set_defaults(json=True)
+    recipe_run.add_argument(
+        "--state-json",
+        action="store_true",
+        help="decode the input as a JSON value instead of text",
+    )
+    recipe_run.add_argument("--action", help="built-in guard only")
+    recipe_run.add_argument("--context", default="", help="built-in guard only")
+    recipe_schema = recipe_sub.add_parser(
+        "schema", help="print the declarative recipe JSON Schema"
+    )
+    recipe_schema.add_argument("--quiet", action="store_true")
+    recipe_schema.set_defaults(json=True)
 
     for name, deprecated in (("guard", False), ("check", True)):
         guard = sub.add_parser(
@@ -253,13 +300,23 @@ def main(
             (
                 value
                 for value in argument_values
-                if value in {"is", "choose", "score", "filter", "guard", "check"}
+                if value
+                in {
+                    "is",
+                    "choose",
+                    "score",
+                    "filter",
+                    "guard",
+                    "check",
+                    "evaluate",
+                    "recipe",
+                }
             ),
             None,
         )
         error_args = argparse.Namespace(
             command=command,
-            json="--json" in argument_values,
+            json="--json" in argument_values or command in {"evaluate", "recipe"},
             quiet="--quiet" in argument_values,
         )
         _emit_error("input_error", str(exc), args=error_args, stderr=stderr)
@@ -267,19 +324,34 @@ def main(
     if args.command == "check" and not args.quiet:
         print("semdecide: warning: 'check' is deprecated; use 'guard'", file=stderr)
     try:
+        if args.command == "evaluate" and args.schema:
+            _emit(
+                EvaluationRequest.model_json_schema(),
+                machine=True,
+                quiet=args.quiet,
+                stdout=stdout,
+            )
+            return 0
+        if args.command == "recipe" and args.recipe_command == "schema":
+            _emit(
+                Recipe.model_json_schema(),
+                machine=True,
+                quiet=args.quiet,
+                stdout=stdout,
+            )
+            return 0
+
         evaluate = provider.evaluate if provider is not None else _evaluator(args)
-        if args.command in ("guard", "check"):
+        is_guard_recipe = args.command == "recipe" and args.name == "guard"
+        if args.command in ("guard", "check") or is_guard_recipe:
+            if is_guard_recipe and (
+                args.text is not None or args.file is not None or args.state_json
+            ):
+                raise InputError(
+                    "guard accepts --action/--context or a JSON action object on stdin"
+                )
             action, context = _guard_input(args, stdin)
-            try:
-                response, latency = evaluate(
-                    {"proposed_action": action, "authorization_context": context},
-                    QUESTIONS,
-                )
-                decision = decide(
-                    response["answers"], model=response.get("model"), latency_ms=latency
-                )
-            except ProviderError:
-                decision = provider_failure("request failed")
+            decision = run_guard(action, context, evaluator=evaluate)
             payload = {
                 "schema_version": SCHEMA_VERSION,
                 "command": "guard",
@@ -297,6 +369,51 @@ def main(
                 stdout=stdout,
             )
             return GUARD_EXIT_CODES[decision.route]
+
+        if args.command == "evaluate":
+            text = read_input(
+                text=None,
+                file=None if args.request == "-" else args.request,
+                stdin=stdin,
+                max_bytes=args.max_input_bytes,
+            )
+            request = EvaluationRequest.model_validate_json(text)
+            result = evaluate_questions(
+                state=request.state,
+                questions=request.questions,
+                evaluator=evaluate,
+            )
+            payload = {
+                "schema_version": SCHEMA_VERSION,
+                "command": "evaluate",
+                **result.model_dump(mode="json"),
+            }
+            _emit(payload, machine=True, quiet=args.quiet, stdout=stdout)
+            return 0
+
+        if args.command == "recipe":
+            if args.action is not None or args.context:
+                raise InputError(
+                    "--action and --context are only supported by the guard recipe"
+                )
+            recipe = load_recipe(args.name, max_bytes=args.max_input_bytes)
+            text = _read(args, stdin)
+            if args.state_json:
+                try:
+                    state = json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise InputError(f"state is not valid JSON: {exc.msg}") from exc
+            else:
+                state = text
+            result = recipe.run(state, evaluator=evaluate)
+            payload = {
+                "schema_version": SCHEMA_VERSION,
+                "command": "recipe",
+                "recipe": recipe.name,
+                **result.model_dump(mode="json"),
+            }
+            _emit(payload, machine=True, quiet=args.quiet, stdout=stdout)
+            return 0
 
         text = _read(args, stdin)
         if args.command == "is":
@@ -420,6 +537,15 @@ def main(
         if uncertain_count:
             return EXIT_UNCERTAIN
         return 0 if selected else EXIT_FALSE
+    except ValidationError:
+        # Pydantic diagnostics can contain the submitted state or instructions.
+        _emit_error(
+            "input_error",
+            "request or question definition does not match the schema",
+            args=args,
+            stderr=stderr,
+        )
+        return EXIT_USAGE
     except (InputError, ValueError) as exc:
         _emit_error("input_error", str(exc), args=args, stderr=stderr)
         return EXIT_USAGE

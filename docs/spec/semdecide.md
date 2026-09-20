@@ -1,5 +1,7 @@
 # SemDecide v0.2: Semantic decisions for Unix and CI
 
+This document records the original v0.2 product specification. The current primitive-first API, dynamic `evaluate` requests, and optional local/user-wide recipes are described in [../recipes.md](../recipes.md) and [../architecture.md](../architecture.md). Guard is now an application built on that public API, not a core assumption.
+
 ## One-line outcome
 
 A developer can pipe text or JSON into `semdecide` and receive a typed, confidence-aware semantic predicate, choice, score, or filtered stream that is safe to compose in shell scripts and CI.
@@ -30,7 +32,7 @@ Positioning: **SemDecide is `jq` for judgment.**
 | Success condition | In under five minutes, a new user installs SemDecide and uses stdin or a file to run a predicate, route among choices, score a rubric, and filter JSONL; machine output and exit codes compose correctly in CI | verified | Directly testable public-interface target |
 | Explicitly NOT doing | Agent execution, identity/authentication, human approval UI, sandboxing, a hosted control plane, prompt generation, general chat, full eval dashboards, vector indexing | verified | Competitive analysis and scope reduction |
 | Product identity | Keep the `SemDecide` name and use `semdecide` as the primary executable. Retain `reflex` only as a temporary compatibility alias and the original guard as a recipe | assumed | Name is already implemented and fits fast System One decisions; reversible |
-| Stack/runtime | Python 3.10+, standard library runtime, `argparse`, provider adapter abstraction, HTTP Jev adapter by default | verified | Existing zero-dependency package and portability requirement |
+| Stack/runtime | Python 3.10+, `argparse`, Pydantic result validation, `python-dotenv` configuration, provider adapter abstraction | verified | Runtime dependencies declared in `pyproject.toml` and portability requirement |
 | Provider | TypeSafe Jev default; provider boundary designed so test doubles and future compatible evaluators can be added without changing command semantics | verified | Jev is the available differentiated backend; adapter avoids hard-coding transport into CLI |
 | Inputs | Argument string, stdin text, JSON value, JSONL records, and files; explicit input mode when ambiguity exists | verified | Unix composability requirement |
 | Core commands | `is`, `choose`, `score`, `filter`; retain `guard` as a recipe/compatibility surface | verified | Maps one-to-one to Jev primitives plus the validated record workflow |
@@ -49,7 +51,7 @@ Positioning: **SemDecide is `jq` for judgment.**
 | License | MIT | verified | Existing repository license |
 | Auth model | Local API key only; no user accounts or hosted service | verified | Explicit non-goal |
 | Deploy target | PyPI and GitHub Releases after repository publication; no server deployment | assumed | User requested open source; publishing externally remains separately approved |
-| Budget | Keep runtime dependency-free and v0.2 small enough to independently understand and audit | verified | Product wedge and OSS adoption goal |
+| Budget | Keep runtime dependencies limited and the implementation small enough to independently understand and audit | verified | Product wedge and OSS adoption goal |
 | Irreversible decisions | None in the local build. Repository publication, package-name reservation, and PyPI release require explicit approval before external action | verified | External publication is reversible only with reputational/package consequences |
 | Acceptance check | Fresh-venv install plus live Jev runs for every command, deterministic fixture tests, malformed input, low-confidence routing, timeout, HTTP errors, partial/missing response, JSON schema, JSONL ordering, limits, wheel/sdist, and secret scan | verified | Maps every public output and integration boundary to observable behavior |
 
@@ -141,12 +143,12 @@ flowchart LR
 
 ### Modules
 
-- `models.py`: immutable request/result domain types and schema version.
+- `models.py`: strict, frozen Pydantic result models and schema version; nested mappings remain mutable.
 - `inputs.py`: stdin/file/text/JSON/JSONL decoding and size limits.
 - `providers/base.py`: provider protocol.
 - `providers/typesafe.py`: Jev HTTP transport, credentials, retries, strict response parsing.
 - `commands.py`: predicate, choice, score, and filter request planning.
-- `policy.py`: deterministic guard policy and fail-closed provider behavior.
+- `recipes/guard.py` (originally `policy.py`): deterministic guard policy and fail-closed provider behavior.
 - `cli.py`: argument parsing, rendering, and exit-code mapping.
 
 ## Build order
